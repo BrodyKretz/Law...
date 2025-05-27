@@ -8,6 +8,7 @@ from datetime import datetime
 import os
 from dotenv import load_dotenv
 import re
+import threading
 
 # Load environment variables
 load_dotenv()
@@ -21,45 +22,11 @@ class JudicialAnalyzer:
         # Data storage
         self.judges_data = {}
         self.current_judge_cases = []
+        self.found_judges = []
         
         # API Key
         self.api_key = os.getenv('SERPAPI_KEY', '')
-        print(f"API Key loaded: {'Yes' if self.api_key else 'No'}")  # Debug print
-        
-        # Sample data for demonstration (fallback if API fails)
-        self.sample_judges = {
-            "California": [
-                "Judge Sarah Martinez",
-                "Judge Michael Chen",
-                "Judge Patricia Williams",
-                "Judge Robert Johnson",
-                "Judge Lisa Anderson"
-            ]
-        }
-        
-        # Sample case data (fallback if API fails)
-        self.sample_cases = {
-            "Judge Sarah Martinez": [
-                {
-                    "case_type": "Grand Theft Auto",
-                    "verdict": "Guilty",
-                    "punishment": "3 Years in Prison",
-                    "criminal_history": "1 Felony, 2 Misdemeanors"
-                },
-                {
-                    "case_type": "Burglary",
-                    "verdict": "Guilty",
-                    "punishment": "5 Years in Prison",
-                    "criminal_history": "2 Felonies"
-                },
-                {
-                    "case_type": "Drug Possession",
-                    "verdict": "Not Guilty",
-                    "punishment": "N/A",
-                    "criminal_history": "No Prior Record"
-                }
-            ]
-        }
+        print(f"API Key loaded: {'Yes' if self.api_key else 'No'}")
         
         self.setup_ui()
         
@@ -83,25 +50,17 @@ class JudicialAnalyzer:
         self.judge_dropdown.grid(row=1, column=1, sticky=tk.W, pady=5)
         self.judge_dropdown.bind('<<ComboboxSelected>>', self.on_judge_selected)
         
-        # Data source selection
-        data_frame = ttk.Frame(main_frame)
-        data_frame.grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=10)
-        
-        ttk.Label(data_frame, text="Data Source:", font=('Arial', 10, 'bold')).pack(side=tk.LEFT, padx=(0, 10))
-        
-        self.data_source_var = tk.StringVar(value="api")
-        ttk.Radiobutton(data_frame, text="Use Real API Data", variable=self.data_source_var, value="api").pack(side=tk.LEFT, padx=5)
-        ttk.Radiobutton(data_frame, text="Use Sample Data", variable=self.data_source_var, value="sample").pack(side=tk.LEFT, padx=5)
-        
-        # Number of results
-        ttk.Label(data_frame, text="Max Results:").pack(side=tk.LEFT, padx=(20, 5))
-        self.max_results_var = tk.StringVar(value="10")
-        self.max_results_spinbox = ttk.Spinbox(data_frame, from_=1, to=20, textvariable=self.max_results_var, width=5)
-        self.max_results_spinbox.pack(side=tk.LEFT)
+        # Search for judges button
+        self.search_judges_button = ttk.Button(main_frame, text="Search for Judges", command=self.search_for_judges)
+        self.search_judges_button.grid(row=0, column=2, padx=10)
         
         # Fetch data button
         self.fetch_button = ttk.Button(main_frame, text="Fetch Judge Data", command=self.fetch_judge_data)
         self.fetch_button.grid(row=1, column=2, padx=10)
+        
+        # Progress bar
+        self.progress = ttk.Progressbar(main_frame, mode='indeterminate')
+        self.progress.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
         
         # Case history table
         ttk.Label(main_frame, text="Judge's Case History:", font=('Arial', 14, 'bold')).grid(row=3, column=0, columnspan=3, sticky=tk.W, pady=(20, 5))
@@ -110,19 +69,19 @@ class JudicialAnalyzer:
         self.tree_frame = ttk.Frame(main_frame)
         self.tree_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
         
-        self.tree = ttk.Treeview(self.tree_frame, columns=('Case Type', 'Verdict', 'Punishment', 'Criminal History'), show='headings', height=10)
+        self.tree = ttk.Treeview(self.tree_frame, columns=('Case Type', 'Verdict', 'Punishment', 'Source'), show='headings', height=10)
         
         # Define headings
         self.tree.heading('Case Type', text='Case Type')
         self.tree.heading('Verdict', text='Verdict')
         self.tree.heading('Punishment', text='Punishment')
-        self.tree.heading('Criminal History', text='Criminal History')
+        self.tree.heading('Source', text='Source')
         
         # Column widths
         self.tree.column('Case Type', width=200)
         self.tree.column('Verdict', width=100)
         self.tree.column('Punishment', width=200)
-        self.tree.column('Criminal History', width=200)
+        self.tree.column('Source', width=200)
         
         # Scrollbar
         scrollbar = ttk.Scrollbar(self.tree_frame, orient=tk.VERTICAL, command=self.tree.yview)
@@ -153,7 +112,7 @@ class JudicialAnalyzer:
         ttk.Label(prediction_frame, text="Case Type:").grid(row=1, column=0, sticky=tk.W, pady=5)
         self.case_type_var = tk.StringVar()
         self.case_type_dropdown = ttk.Combobox(prediction_frame, textvariable=self.case_type_var, width=30)
-        self.case_type_dropdown['values'] = ['Grand Theft Auto', 'Burglary', 'Drug Possession', 'Assault', 'Fraud', 'DUI', 'Robbery']
+        self.case_type_dropdown['values'] = ['Grand Theft Auto', 'Burglary', 'Drug Possession', 'Assault', 'Fraud', 'DUI', 'Robbery', 'Murder', 'Domestic Violence']
         self.case_type_dropdown.grid(row=1, column=1, sticky=tk.W, pady=5)
         
         # Predict button
@@ -177,14 +136,102 @@ class JudicialAnalyzer:
         main_frame.rowconfigure(4, weight=1)
         
     def on_state_selected(self, event):
-        selected_state = self.state_var.get()
-        if selected_state in self.sample_judges:
-            self.judge_dropdown['values'] = self.sample_judges[selected_state]
-            self.judge_dropdown.set('')
-            self.clear_case_history()
-            
+        self.judge_dropdown.set('')
+        self.judge_dropdown['values'] = []
+        self.clear_case_history()
+        self.status_var.set("Click 'Search for Judges' to find judges in " + self.state_var.get())
+        
     def on_judge_selected(self, event):
         self.clear_case_history()
+        
+    def search_for_judges(self):
+        """Search Google Scholar for judges in the selected state"""
+        state = self.state_var.get()
+        if not state:
+            messagebox.showwarning("Warning", "Please select a state first!")
+            return
+            
+        if not self.api_key:
+            messagebox.showerror("Error", "Please set your SERPAPI_KEY in the .env file!")
+            return
+        
+        # Run search in background thread
+        thread = threading.Thread(target=self._search_judges_thread, args=(state,))
+        thread.daemon = True
+        thread.start()
+        
+    def _search_judges_thread(self, state):
+        """Background thread to search for judges"""
+        self.root.after(0, self.progress.start)
+        self.root.after(0, lambda: self.status_var.set(f"Searching for judges in {state}..."))
+        
+        try:
+            # Search for various court types
+            judge_names = set()
+            court_types = [
+                "Superior Court",
+                "District Court",
+                "Appeals Court",
+                "Supreme Court",
+                "Criminal Court"
+            ]
+            
+            for court_type in court_types:
+                url = "https://serpapi.com/search"
+                params = {
+                    "engine": "google_scholar",
+                    "q": f'"{state} {court_type}" "Judge" criminal case verdict -book -review',
+                    "api_key": self.api_key,
+                    "num": "20"
+                }
+                
+                try:
+                    response = requests.get(url, params=params, timeout=30)
+                    if response.status_code == 200:
+                        data = response.json()
+                        
+                        # Extract judge names from results
+                        for result in data.get("organic_results", []):
+                            title = result.get("title", "")
+                            snippet = result.get("snippet", "")
+                            text = title + " " + snippet
+                            
+                            # Look for judge names
+                            judge_patterns = [
+                                r"Judge\s+([A-Z][a-z]+\s+[A-Z][a-z]+)",
+                                r"Justice\s+([A-Z][a-z]+\s+[A-Z][a-z]+)",
+                                r"Hon\.\s+([A-Z][a-z]+\s+[A-Z][a-z]+)",
+                                r"Honorable\s+([A-Z][a-z]+\s+[A-Z][a-z]+)"
+                            ]
+                            
+                            for pattern in judge_patterns:
+                                matches = re.findall(pattern, text)
+                                for match in matches:
+                                    if match and len(match.split()) >= 2:
+                                        judge_names.add(f"Judge {match}")
+                                        
+                except Exception as e:
+                    print(f"Error searching {court_type}: {e}")
+                    continue
+            
+            # Update UI in main thread
+            self.found_judges = sorted(list(judge_names))
+            self.root.after(0, self._update_judge_dropdown)
+            
+        except Exception as e:
+            self.root.after(0, lambda: messagebox.showerror("Error", f"Failed to search for judges: {str(e)}"))
+        finally:
+            self.root.after(0, self.progress.stop)
+            
+    def _update_judge_dropdown(self):
+        """Update judge dropdown with found judges"""
+        if self.found_judges:
+            self.judge_dropdown['values'] = self.found_judges
+            self.status_var.set(f"Found {len(self.found_judges)} judges. Select one to fetch their cases.")
+        else:
+            # If no judges found, search for any criminal cases in the state
+            self.judge_dropdown['values'] = ["Search All Criminal Cases"]
+            self.status_var.set("No specific judges found. You can search all criminal cases.")
         
     def fetch_judge_data(self):
         judge_name = self.judge_var.get()
@@ -192,50 +239,31 @@ class JudicialAnalyzer:
             messagebox.showwarning("Warning", "Please select a judge first!")
             return
         
-        # Check if user wants to use sample data
-        if self.data_source_var.get() == "sample":
-            self.status_var.set("Using sample data (as requested)")
-            if judge_name in self.sample_cases:
-                self.current_judge_cases = self.sample_cases[judge_name]
+        # Run fetch in background thread
+        thread = threading.Thread(target=self._fetch_judge_data_thread, args=(judge_name,))
+        thread.daemon = True
+        thread.start()
+        
+    def _fetch_judge_data_thread(self, judge_name):
+        """Background thread to fetch judge data"""
+        self.root.after(0, self.progress.start)
+        self.root.after(0, lambda: self.status_var.set(f"Fetching cases for {judge_name}..."))
+        
+        try:
+            # Fetch real data from Google Scholar
+            real_data = self.fetch_from_google_scholar(judge_name, self.state_var.get())
+            
+            if real_data:
+                self.current_judge_cases = real_data
+                self.root.after(0, lambda: self.status_var.set(f"Found {len(real_data)} cases"))
+                self.root.after(0, self.display_case_history)
             else:
-                self.current_judge_cases = [
-                    {
-                        "case_type": "Various Offenses",
-                        "verdict": "Mixed",
-                        "punishment": "Varies",
-                        "criminal_history": "Varies"
-                    }
-                ]
-            self.display_case_history()
-            return
-        
-        # Use API
-        self.status_var.set("Fetching data from Google Scholar...")
-        self.root.update()
-        
-        # Try to fetch real data from Google Scholar
-        real_data = self.fetch_from_google_scholar(judge_name, self.state_var.get())
-        
-        if real_data:
-            self.current_judge_cases = real_data
-            self.status_var.set(f"Loaded {len(real_data)} cases from Google Scholar")
-        else:
-            # Fall back to sample data
-            if judge_name in self.sample_cases:
-                self.current_judge_cases = self.sample_cases[judge_name]
-                self.status_var.set("Using sample data (API call failed)")
-            else:
-                self.current_judge_cases = [
-                    {
-                        "case_type": "Various Offenses",
-                        "verdict": "Mixed",
-                        "punishment": "Varies",
-                        "criminal_history": "Varies"
-                    }
-                ]
-                self.status_var.set("Using generic sample data")
-        
-        self.display_case_history()
+                self.root.after(0, lambda: self.status_var.set("No cases found"))
+                
+        except Exception as e:
+            self.root.after(0, lambda: messagebox.showerror("Error", f"Failed to fetch data: {str(e)}"))
+        finally:
+            self.root.after(0, self.progress.stop)
             
     def clear_case_history(self):
         for item in self.tree.get_children():
@@ -248,7 +276,7 @@ class JudicialAnalyzer:
                 case['case_type'],
                 case['verdict'],
                 case['punishment'],
-                case['criminal_history']
+                case.get('source', 'Google Scholar')
             ))
             
     def predict_outcome(self):
@@ -300,52 +328,45 @@ class JudicialAnalyzer:
         Fetch judge data from Google Scholar API
         """
         if not self.api_key:
-            messagebox.showerror("Error", "Please set your SERPAPI_KEY in the .env file!")
             return None
         
-        max_results = int(self.max_results_var.get())
-        
         url = "https://serpapi.com/search"
+        
+        # If searching all cases, modify query
+        if judge_name == "Search All Criminal Cases":
+            query = f'"{state}" criminal case verdict sentence "guilty OR not guilty"'
+        else:
+            query = f'"{judge_name}" "{state}" criminal case verdict sentence'
+        
         params = {
             "engine": "google_scholar",
-            "q": f'"{judge_name}" "{state} court" criminal case verdict',
+            "q": query,
             "api_key": self.api_key,
-            "num": str(max_results)
+            "num": "40"  # Get more results
         }
-        
-        print(f"Making API request to: {url}")  # Debug
-        print(f"Query: {params['q']}")  # Debug
         
         try:
             response = requests.get(url, params=params, timeout=30)
-            print(f"Response status: {response.status_code}")  # Debug
             
             if response.status_code != 200:
-                messagebox.showerror("API Error", f"HTTP Error: {response.status_code}")
                 return None
             
             data = response.json()
             
             if "error" in data:
-                messagebox.showerror("API Error", f"SerpAPI Error: {data['error']}")
                 return None
             
             # Parse the results
             cases = []
             organic_results = data.get("organic_results", [])
             
-            print(f"Found {len(organic_results)} results")  # Debug
-            
-            if not organic_results:
-                messagebox.showinfo("No Results", f"No cases found for {judge_name} in Google Scholar.")
-                return None
-            
-            for i, result in enumerate(organic_results[:max_results]):
-                # Extract case information from title and snippet
+            for result in organic_results:
+                # Extract case information
                 title = result.get("title", "")
                 snippet = result.get("snippet", "")
+                link = result.get("link", "")
                 
-                # Parse case type from title/snippet
+                # Parse case type
                 case_type = self.extract_case_type(title + " " + snippet)
                 
                 # Parse verdict
@@ -354,30 +375,19 @@ class JudicialAnalyzer:
                 # Parse punishment
                 punishment = self.extract_punishment(title + " " + snippet)
                 
-                # Criminal history (harder to extract, so we'll use a placeholder)
-                criminal_history = "Not Available"
-                
-                cases.append({
-                    "case_type": case_type,
-                    "verdict": verdict,
-                    "punishment": punishment,
-                    "criminal_history": criminal_history
-                })
-                
-            return cases
+                # Only add if we found meaningful data
+                if verdict != "Unknown" or punishment != "Not specified":
+                    cases.append({
+                        "case_type": case_type,
+                        "verdict": verdict,
+                        "punishment": punishment,
+                        "source": title[:50] + "..." if len(title) > 50 else title
+                    })
             
-        except requests.exceptions.Timeout:
-            messagebox.showerror("Network Error", "Request timed out. Please try again.")
-            return None
-        except requests.exceptions.RequestException as e:
-            messagebox.showerror("Network Error", f"Failed to connect to SerpAPI: {str(e)}")
-            return None
-        except json.JSONDecodeError:
-            messagebox.showerror("Error", "Invalid response from API")
-            return None
+            return cases if cases else None
+            
         except Exception as e:
-            messagebox.showerror("Error", f"Unexpected error: {str(e)}")
-            print(f"Full error: {e}")  # Debug
+            print(f"Error fetching data: {e}")
             return None
     
     def extract_case_type(self, text):
@@ -385,22 +395,30 @@ class JudicialAnalyzer:
         case_types = {
             'murder': 'Murder',
             'homicide': 'Homicide',
+            'manslaughter': 'Manslaughter',
             'assault': 'Assault',
             'battery': 'Battery',
             'theft': 'Theft',
+            'larceny': 'Larceny',
             'burglary': 'Burglary',
             'robbery': 'Robbery',
             'drug': 'Drug Offense',
             'narcotic': 'Drug Offense',
+            'possession': 'Drug Possession',
+            'trafficking': 'Drug Trafficking',
             'fraud': 'Fraud',
             'embezzlement': 'Embezzlement',
             'dui': 'DUI',
             'dwi': 'DUI',
             'domestic': 'Domestic Violence',
             'sexual': 'Sexual Offense',
+            'rape': 'Sexual Assault',
             'arson': 'Arson',
             'vandalism': 'Vandalism',
-            'weapon': 'Weapons Charge'
+            'weapon': 'Weapons Charge',
+            'firearm': 'Weapons Charge',
+            'kidnapping': 'Kidnapping',
+            'conspiracy': 'Conspiracy'
         }
         
         text_lower = text.lower()
@@ -414,12 +432,15 @@ class JudicialAnalyzer:
         """Extract verdict from text"""
         text_lower = text.lower()
         
-        if any(word in text_lower for word in ['guilty', 'convicted', 'conviction']):
+        # Look for guilty verdicts
+        if any(word in text_lower for word in ['guilty', 'convicted', 'conviction', 'found guilty']):
             return "Guilty"
-        elif any(word in text_lower for word in ['not guilty', 'acquitted', 'acquittal', 'dismissed']):
+        elif any(word in text_lower for word in ['not guilty', 'acquitted', 'acquittal', 'dismissed', 'charges dropped']):
             return "Not Guilty"
-        elif any(word in text_lower for word in ['plea', 'plead', 'pled']):
+        elif any(word in text_lower for word in ['plea', 'plead', 'pled', 'plea bargain', 'plea deal']):
             return "Plea Deal"
+        elif 'mistrial' in text_lower:
+            return "Mistrial"
         
         return "Unknown"
     
@@ -427,23 +448,40 @@ class JudicialAnalyzer:
         """Extract punishment from text"""
         import re
         
-        # Look for prison/jail sentences
-        prison_match = re.search(r'(\d+)\s*(year|month|day)s?\s*(in\s*)?(prison|jail|incarceration)', text, re.IGNORECASE)
-        if prison_match:
-            return f"{prison_match.group(1)} {prison_match.group(2)}s in prison"
+        # Look for death penalty
+        if any(phrase in text.lower() for phrase in ['death penalty', 'death sentence', 'capital punishment']):
+            return "Death Penalty"
+        
+        # Look for life sentences
+        if any(phrase in text.lower() for phrase in ['life in prison', 'life sentence', 'life without parole']):
+            return "Life in Prison"
+        
+        # Look for specific prison/jail sentences
+        prison_patterns = [
+            r'(\d+)\s*(?:to\s*)?(\d+)?\s*(year|month|day)s?\s*(?:in\s*)?(?:state\s*)?(?:prison|jail|incarceration)',
+            r'sentenced?\s*to\s*(\d+)\s*(year|month|day)s?',
+            r'(\d+)\s*(year|month|day)s?\s*(?:prison|jail)\s*(?:sentence|term)'
+        ]
+        
+        for pattern in prison_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                return match.group(0).strip()
         
         # Look for probation
-        probation_match = re.search(r'(\d+)\s*(year|month)s?\s*(of\s*)?probation', text, re.IGNORECASE)
+        probation_match = re.search(r'(\d+)\s*(year|month)s?\s*(?:of\s*)?probation', text, re.IGNORECASE)
         if probation_match:
-            return f"{probation_match.group(1)} {probation_match.group(2)}s probation"
+            return probation_match.group(0)
         
         # Look for fines
-        fine_match = re.search(r'\$[\d,]+\s*fine', text, re.IGNORECASE)
+        fine_match = re.search(r'\$[\d,]+(?:\.\d{2})?\s*(?:fine|penalty|restitution)', text, re.IGNORECASE)
         if fine_match:
             return fine_match.group(0)
         
-        if "life" in text.lower() and ("prison" in text.lower() or "sentence" in text.lower()):
-            return "Life in prison"
+        # Look for community service
+        service_match = re.search(r'(\d+)\s*hours?\s*(?:of\s*)?community\s*service', text, re.IGNORECASE)
+        if service_match:
+            return service_match.group(0)
         
         return "Not specified"
 
