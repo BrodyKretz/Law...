@@ -7,6 +7,7 @@ import pandas as pd
 from datetime import datetime
 import os
 from dotenv import load_dotenv
+import re
 
 # Load environment variables
 load_dotenv()
@@ -21,10 +22,10 @@ class JudicialAnalyzer:
         self.judges_data = {}
         self.current_judge_cases = []
         
-        # API Key (you'll need to set this in .env file)
+        # API Key
         self.api_key = os.getenv('SERPAPI_KEY', '')
         
-        # Sample data for demonstration (replace with real API calls)
+        # Sample data for demonstration (fallback if API fails)
         self.sample_judges = {
             "California": [
                 "Judge Sarah Martinez",
@@ -35,7 +36,7 @@ class JudicialAnalyzer:
             ]
         }
         
-        # Sample case data (in production, this would come from API)
+        # Sample case data (fallback if API fails)
         self.sample_cases = {
             "Judge Sarah Martinez": [
                 {
@@ -160,6 +161,12 @@ class JudicialAnalyzer:
         self.results_text = tk.Text(prediction_frame, height=6, width=70, wrap=tk.WORD)
         self.results_text.grid(row=3, column=0, columnspan=2, pady=5)
         
+        # Status bar
+        self.status_var = tk.StringVar()
+        self.status_var.set("Ready. API Key: " + ("Loaded ✓" if self.api_key else "Not Found ✗"))
+        status_bar = ttk.Label(main_frame, textvariable=self.status_var, relief=tk.SUNKEN)
+        status_bar.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(10, 0))
+        
         # Configure grid weights
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
@@ -181,25 +188,34 @@ class JudicialAnalyzer:
         if not judge_name:
             messagebox.showwarning("Warning", "Please select a judge first!")
             return
-            
-        # In production, this would make an API call to Google Scholar
-        # For now, use sample data
-        if judge_name in self.sample_cases:
-            self.current_judge_cases = self.sample_cases[judge_name]
-            self.display_case_history()
+        
+        self.status_var.set("Fetching data from Google Scholar...")
+        self.root.update()
+        
+        # Try to fetch real data from Google Scholar
+        real_data = self.fetch_from_google_scholar(judge_name, self.state_var.get())
+        
+        if real_data:
+            self.current_judge_cases = real_data
+            self.status_var.set(f"Loaded {len(real_data)} cases from Google Scholar")
         else:
-            # Simulate API call
-            messagebox.showinfo("Info", f"Fetching data for {judge_name}...\n(In production, this would query Google Scholar API)")
-            # Generate some sample data
-            self.current_judge_cases = [
-                {
-                    "case_type": "Various Offenses",
-                    "verdict": "Mixed",
-                    "punishment": "Varies",
-                    "criminal_history": "Varies"
-                }
-            ]
-            self.display_case_history()
+            # Fall back to sample data
+            if judge_name in self.sample_cases:
+                self.current_judge_cases = self.sample_cases[judge_name]
+                self.status_var.set("Using sample data (API call failed)")
+            else:
+                # Generate generic sample data
+                self.current_judge_cases = [
+                    {
+                        "case_type": "Various Offenses",
+                        "verdict": "Mixed",
+                        "punishment": "Varies",
+                        "criminal_history": "Varies"
+                    }
+                ]
+                self.status_var.set("Using generic sample data")
+        
+        self.display_case_history()
             
     def clear_case_history(self):
         for item in self.tree.get_children():
@@ -262,28 +278,134 @@ class JudicialAnalyzer:
     def fetch_from_google_scholar(self, judge_name, state):
         """
         Fetch judge data from Google Scholar API
-        In production, implement this method to make actual API calls
         """
         if not self.api_key:
             messagebox.showerror("Error", "Please set your SERPAPI_KEY in the .env file!")
             return None
             
-        # Example API call structure (implement actual API logic)
         url = "https://serpapi.com/search"
         params = {
             "engine": "google_scholar",
-            "q": f"{judge_name} {state} court decisions",
-            "api_key": self.api_key
+            "q": f'"{judge_name}" "{state} court" criminal case verdict',
+            "api_key": self.api_key,
+            "num": "20"  # Get up to 20 results
         }
         
         try:
-            # response = requests.get(url, params=params)
-            # data = response.json()
-            # Process and return structured data
-            pass
-        except Exception as e:
-            messagebox.showerror("API Error", f"Failed to fetch data: {str(e)}")
+            response = requests.get(url, params=params)
+            data = response.json()
+            
+            if "error" in data:
+                messagebox.showerror("API Error", f"SerpAPI Error: {data['error']}")
+                return None
+            
+            # Parse the results
+            cases = []
+            organic_results = data.get("organic_results", [])
+            
+            for result in organic_results:
+                # Extract case information from title and snippet
+                title = result.get("title", "")
+                snippet = result.get("snippet", "")
+                
+                # Parse case type from title/snippet
+                case_type = self.extract_case_type(title + " " + snippet)
+                
+                # Parse verdict
+                verdict = self.extract_verdict(title + " " + snippet)
+                
+                # Parse punishment
+                punishment = self.extract_punishment(title + " " + snippet)
+                
+                # Criminal history (harder to extract, so we'll use a placeholder)
+                criminal_history = "Not Available"
+                
+                cases.append({
+                    "case_type": case_type,
+                    "verdict": verdict,
+                    "punishment": punishment,
+                    "criminal_history": criminal_history
+                })
+            
+            if not cases:
+                messagebox.showinfo("No Results", f"No cases found for {judge_name} in Google Scholar. Using sample data.")
+                return None
+                
+            return cases[:10]  # Return up to 10 cases
+            
+        except requests.exceptions.RequestException as e:
+            messagebox.showerror("Network Error", f"Failed to connect to SerpAPI: {str(e)}")
             return None
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to fetch data: {str(e)}")
+            return None
+    
+    def extract_case_type(self, text):
+        """Extract case type from text"""
+        case_types = {
+            'murder': 'Murder',
+            'homicide': 'Homicide',
+            'assault': 'Assault',
+            'battery': 'Battery',
+            'theft': 'Theft',
+            'burglary': 'Burglary',
+            'robbery': 'Robbery',
+            'drug': 'Drug Offense',
+            'narcotic': 'Drug Offense',
+            'fraud': 'Fraud',
+            'embezzlement': 'Embezzlement',
+            'dui': 'DUI',
+            'dwi': 'DUI',
+            'domestic': 'Domestic Violence',
+            'sexual': 'Sexual Offense',
+            'arson': 'Arson',
+            'vandalism': 'Vandalism',
+            'weapon': 'Weapons Charge'
+        }
+        
+        text_lower = text.lower()
+        for keyword, case_type in case_types.items():
+            if keyword in text_lower:
+                return case_type
+        
+        return "Criminal Case"
+    
+    def extract_verdict(self, text):
+        """Extract verdict from text"""
+        text_lower = text.lower()
+        
+        if any(word in text_lower for word in ['guilty', 'convicted', 'conviction']):
+            return "Guilty"
+        elif any(word in text_lower for word in ['not guilty', 'acquitted', 'acquittal', 'dismissed']):
+            return "Not Guilty"
+        elif any(word in text_lower for word in ['plea', 'plead', 'pled']):
+            return "Plea Deal"
+        
+        return "Unknown"
+    
+    def extract_punishment(self, text):
+        """Extract punishment from text"""
+        import re
+        
+        # Look for prison/jail sentences
+        prison_match = re.search(r'(\d+)\s*(year|month|day)s?\s*(in\s*)?(prison|jail|incarceration)', text, re.IGNORECASE)
+        if prison_match:
+            return f"{prison_match.group(1)} {prison_match.group(2)}s in prison"
+        
+        # Look for probation
+        probation_match = re.search(r'(\d+)\s*(year|month)s?\s*(of\s*)?probation', text, re.IGNORECASE)
+        if probation_match:
+            return f"{probation_match.group(1)} {probation_match.group(2)}s probation"
+        
+        # Look for fines
+        fine_match = re.search(r'\$[\d,]+\s*fine', text, re.IGNORECASE)
+        if fine_match:
+            return fine_match.group(0)
+        
+        if "life" in text.lower() and ("prison" in text.lower() or "sentence" in text.lower()):
+            return "Life in prison"
+        
+        return "Not specified"
 
 def main():
     root = tk.Tk()
