@@ -16,7 +16,7 @@ class JudicialAnalyzer:
     def __init__(self, root):
         self.root = root
         self.root.title("Judicial Decision Analyzer")
-        self.root.geometry("1000x700")
+        self.root.geometry("1000x750")
         
         # Data storage
         self.judges_data = {}
@@ -24,6 +24,7 @@ class JudicialAnalyzer:
         
         # API Key
         self.api_key = os.getenv('SERPAPI_KEY', '')
+        print(f"API Key loaded: {'Yes' if self.api_key else 'No'}")  # Debug print
         
         # Sample data for demonstration (fallback if API fails)
         self.sample_judges = {
@@ -57,20 +58,6 @@ class JudicialAnalyzer:
                     "punishment": "N/A",
                     "criminal_history": "No Prior Record"
                 }
-            ],
-            "Judge Michael Chen": [
-                {
-                    "case_type": "Assault",
-                    "verdict": "Guilty",
-                    "punishment": "2 Years Probation",
-                    "criminal_history": "1 Misdemeanor"
-                },
-                {
-                    "case_type": "Fraud",
-                    "verdict": "Guilty",
-                    "punishment": "18 Months in Prison",
-                    "criminal_history": "No Prior Record"
-                }
             ]
         }
         
@@ -96,16 +83,32 @@ class JudicialAnalyzer:
         self.judge_dropdown.grid(row=1, column=1, sticky=tk.W, pady=5)
         self.judge_dropdown.bind('<<ComboboxSelected>>', self.on_judge_selected)
         
+        # Data source selection
+        data_frame = ttk.Frame(main_frame)
+        data_frame.grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=10)
+        
+        ttk.Label(data_frame, text="Data Source:", font=('Arial', 10, 'bold')).pack(side=tk.LEFT, padx=(0, 10))
+        
+        self.data_source_var = tk.StringVar(value="api")
+        ttk.Radiobutton(data_frame, text="Use Real API Data", variable=self.data_source_var, value="api").pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(data_frame, text="Use Sample Data", variable=self.data_source_var, value="sample").pack(side=tk.LEFT, padx=5)
+        
+        # Number of results
+        ttk.Label(data_frame, text="Max Results:").pack(side=tk.LEFT, padx=(20, 5))
+        self.max_results_var = tk.StringVar(value="10")
+        self.max_results_spinbox = ttk.Spinbox(data_frame, from_=1, to=20, textvariable=self.max_results_var, width=5)
+        self.max_results_spinbox.pack(side=tk.LEFT)
+        
         # Fetch data button
         self.fetch_button = ttk.Button(main_frame, text="Fetch Judge Data", command=self.fetch_judge_data)
         self.fetch_button.grid(row=1, column=2, padx=10)
         
         # Case history table
-        ttk.Label(main_frame, text="Judge's Case History:", font=('Arial', 14, 'bold')).grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=(20, 5))
+        ttk.Label(main_frame, text="Judge's Case History:", font=('Arial', 14, 'bold')).grid(row=3, column=0, columnspan=3, sticky=tk.W, pady=(20, 5))
         
         # Create Treeview for case history
         self.tree_frame = ttk.Frame(main_frame)
-        self.tree_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
+        self.tree_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
         
         self.tree = ttk.Treeview(self.tree_frame, columns=('Case Type', 'Verdict', 'Punishment', 'Criminal History'), show='headings', height=10)
         
@@ -129,7 +132,7 @@ class JudicialAnalyzer:
         
         # Client case prediction section
         prediction_frame = ttk.LabelFrame(main_frame, text="Case Outcome Prediction", padding="10")
-        prediction_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=20)
+        prediction_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=20)
         
         # Client criminal history
         ttk.Label(prediction_frame, text="Client's Criminal History:").grid(row=0, column=0, sticky=tk.W, pady=5)
@@ -165,13 +168,13 @@ class JudicialAnalyzer:
         self.status_var = tk.StringVar()
         self.status_var.set("Ready. API Key: " + ("Loaded ✓" if self.api_key else "Not Found ✗"))
         status_bar = ttk.Label(main_frame, textvariable=self.status_var, relief=tk.SUNKEN)
-        status_bar.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(10, 0))
+        status_bar.grid(row=6, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(10, 0))
         
         # Configure grid weights
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
-        main_frame.rowconfigure(3, weight=1)
+        main_frame.rowconfigure(4, weight=1)
         
     def on_state_selected(self, event):
         selected_state = self.state_var.get()
@@ -189,6 +192,24 @@ class JudicialAnalyzer:
             messagebox.showwarning("Warning", "Please select a judge first!")
             return
         
+        # Check if user wants to use sample data
+        if self.data_source_var.get() == "sample":
+            self.status_var.set("Using sample data (as requested)")
+            if judge_name in self.sample_cases:
+                self.current_judge_cases = self.sample_cases[judge_name]
+            else:
+                self.current_judge_cases = [
+                    {
+                        "case_type": "Various Offenses",
+                        "verdict": "Mixed",
+                        "punishment": "Varies",
+                        "criminal_history": "Varies"
+                    }
+                ]
+            self.display_case_history()
+            return
+        
+        # Use API
         self.status_var.set("Fetching data from Google Scholar...")
         self.root.update()
         
@@ -204,7 +225,6 @@ class JudicialAnalyzer:
                 self.current_judge_cases = self.sample_cases[judge_name]
                 self.status_var.set("Using sample data (API call failed)")
             else:
-                # Generate generic sample data
                 self.current_judge_cases = [
                     {
                         "case_type": "Various Offenses",
@@ -244,7 +264,7 @@ class JudicialAnalyzer:
         # Clear previous results
         self.results_text.delete(1.0, tk.END)
         
-        # Simple prediction logic (in production, use ML model)
+        # Simple prediction logic
         guilty_rate = self.calculate_guilty_rate()
         severity_score = self.calculate_severity_score(felonies, misdemeanors)
         
@@ -282,17 +302,28 @@ class JudicialAnalyzer:
         if not self.api_key:
             messagebox.showerror("Error", "Please set your SERPAPI_KEY in the .env file!")
             return None
-            
+        
+        max_results = int(self.max_results_var.get())
+        
         url = "https://serpapi.com/search"
         params = {
             "engine": "google_scholar",
             "q": f'"{judge_name}" "{state} court" criminal case verdict',
             "api_key": self.api_key,
-            "num": "20"  # Get up to 20 results
+            "num": str(max_results)
         }
         
+        print(f"Making API request to: {url}")  # Debug
+        print(f"Query: {params['q']}")  # Debug
+        
         try:
-            response = requests.get(url, params=params)
+            response = requests.get(url, params=params, timeout=30)
+            print(f"Response status: {response.status_code}")  # Debug
+            
+            if response.status_code != 200:
+                messagebox.showerror("API Error", f"HTTP Error: {response.status_code}")
+                return None
+            
             data = response.json()
             
             if "error" in data:
@@ -303,7 +334,13 @@ class JudicialAnalyzer:
             cases = []
             organic_results = data.get("organic_results", [])
             
-            for result in organic_results:
+            print(f"Found {len(organic_results)} results")  # Debug
+            
+            if not organic_results:
+                messagebox.showinfo("No Results", f"No cases found for {judge_name} in Google Scholar.")
+                return None
+            
+            for i, result in enumerate(organic_results[:max_results]):
                 # Extract case information from title and snippet
                 title = result.get("title", "")
                 snippet = result.get("snippet", "")
@@ -326,18 +363,21 @@ class JudicialAnalyzer:
                     "punishment": punishment,
                     "criminal_history": criminal_history
                 })
-            
-            if not cases:
-                messagebox.showinfo("No Results", f"No cases found for {judge_name} in Google Scholar. Using sample data.")
-                return None
                 
-            return cases[:10]  # Return up to 10 cases
+            return cases
             
+        except requests.exceptions.Timeout:
+            messagebox.showerror("Network Error", "Request timed out. Please try again.")
+            return None
         except requests.exceptions.RequestException as e:
             messagebox.showerror("Network Error", f"Failed to connect to SerpAPI: {str(e)}")
             return None
+        except json.JSONDecodeError:
+            messagebox.showerror("Error", "Invalid response from API")
+            return None
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to fetch data: {str(e)}")
+            messagebox.showerror("Error", f"Unexpected error: {str(e)}")
+            print(f"Full error: {e}")  # Debug
             return None
     
     def extract_case_type(self, text):
