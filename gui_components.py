@@ -82,7 +82,7 @@ class ClientFrame:
         
         # Analyze button
         self.analyze_button = ttk.Button(self.frame, text="Analyze Case Outcome")
-        self.analyze_button.grid(row=2, column=0, columnspan=4, pady=10, sticky=tk.W, pady=5)
+        self.analyze_button.grid(row=2, column=0, columnspan=4, pady=10)=4, sticky=tk.W, pady=5)
         
         ttk.Label(history_frame, text="Prior Felonies:").pack(side=tk.LEFT)
         self.felonies_var = tk.StringVar(value="0")
