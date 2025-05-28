@@ -250,9 +250,8 @@ class DatabaseBuilder:
             return None
         except Exception as e:
             print(f"Unexpected error: {e}")
-            return None"""
-Database builder for fetching and storing criminal case data from Google Scholar
-"""
+            return None
+            
 import requests
 import os
 from dotenv import load_dotenv
