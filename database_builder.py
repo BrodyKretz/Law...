@@ -1,8 +1,10 @@
+
 """
 Database builder for fetching and storing criminal case data from Google Scholar
 """
 import requests
 import os
+import re
 from dotenv import load_dotenv
 from extractors import CaseExtractor
 import config
@@ -16,6 +18,120 @@ class DatabaseBuilder:
     def __init__(self):
         self.api_key = os.getenv('SERPAPI_KEY', '')
         self.extractor = CaseExtractor()
+    
+    def search_judges_in_state(self, state):
+        """
+        Search for judges in a specific state
+        
+        Args:
+            state: State to search in
+            
+        Returns:
+            list: List of judge names found
+        """
+        judges = set()
+        
+        # Search queries to find judges
+        search_queries = [
+            f'"{state}" "Judge" criminal court verdict sentence',
+            f'"{state} Superior Court" "Judge" criminal case',
+            f'"{state} District Court" "Judge" criminal defendant',
+            f'"{state}" "Honorable Judge" criminal sentencing'
+        ]
+        
+        for query in search_queries:
+            results = self._search_google_scholar(query, 0)
+            
+            if not results:
+                continue
+            
+            for result in results:
+                title = result.get("title", "")
+                snippet = result.get("snippet", "")
+                text = title + " " + snippet
+                
+                # Extract judge names
+                judge_patterns = [
+                    r'Judge\s+([A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+)',
+                    r'Justice\s+([A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+)',
+                    r'Hon\.\s+([A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+)',
+                    r'Honorable\s+([A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+)'
+                ]
+                
+                for pattern in judge_patterns:
+                    matches = re.findall(pattern, text)
+                    for match in matches:
+                        if match and len(match.split()) >= 2:  # Valid name
+                            judges.add(f"Judge {match}")
+        
+        return sorted(list(judges))
+    
+    def build_judge_database(self, state, judge_name, num_cases, progress_callback=None):
+        """
+        Build database of cases for a specific judge
+        
+        Args:
+            state: State to search in
+            judge_name: Name of the judge
+            num_cases: Number of cases to fetch
+            progress_callback: Function to call with progress updates
+            
+        Returns:
+            list: Case database for this judge
+        """
+        case_database = []
+        
+        # Build search queries specific to this judge
+        search_queries = [
+            f'"{judge_name}" "{state}" criminal verdict sentence',
+            f'"{judge_name}" criminal defendant "prior convictions"',
+            f'"{judge_name}" sentencing "criminal history"',
+            f'"{judge_name}" "found guilty" prison term',
+            f'"{judge_name}" plea deal criminal case'
+        ]
+        
+        cases_found = 0
+        
+        for query_idx, query in enumerate(search_queries):
+            if cases_found >= num_cases:
+                break
+                
+            # Get multiple pages of results
+            for page in range(config.PAGES_PER_QUERY):
+                if cases_found >= num_cases:
+                    break
+                    
+                results = self._search_google_scholar(query, page)
+                
+                if not results:
+                    continue
+                
+                for result in results:
+                    title = result.get("title", "")
+                    snippet = result.get("snippet", "")
+                    text = title + " " + snippet
+                    
+                    # Only process if this judge is mentioned
+                    if judge_name.replace("Judge ", "") not in text:
+                        continue
+                    
+                    # Extract case information
+                    case_info = self.extractor.extract_case_details(text)
+                    
+                    # Set the judge name
+                    case_info['judge'] = judge_name
+                    
+                    if case_info and case_info['verdict'] != 'Unknown':
+                        case_database.append(case_info)
+                        cases_found += 1
+                        
+                        if progress_callback:
+                            progress_callback(cases_found)
+                        
+                        if cases_found >= num_cases:
+                            break
+        
+        return case_database
         
     def build_database(self, state, case_type_filter, num_cases, progress_callback=None):
         """
