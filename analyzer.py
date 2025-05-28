@@ -68,6 +68,7 @@ Case analysis and prediction engine for criminal cases
 """
 import re
 import config
+from datetime import datetime
 
 class CaseAnalyzer:
     """Analyzes cases and generates predictions"""
