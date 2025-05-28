@@ -5,6 +5,7 @@ import requests
 import os
 from dotenv import load_dotenv
 from extractors import CaseExtractor
+import config
 
 # Load environment variables
 load_dotenv()
@@ -32,14 +33,8 @@ class DatabaseBuilder:
         case_database = []
         judges_data = {}
         
-        # Search queries to find criminal cases with history
-        search_queries = [
-            f'"{state}" criminal "prior convictions" "sentenced to" verdict',
-            f'"{state}" "criminal history" "found guilty" sentence judge',
-            f'"{state}" defendant "felony record" "prison term" court',
-            f'"{state}" "repeat offender" conviction sentencing criminal',
-            f'"{state}" "criminal record" "plea deal" "years prison"'
-        ]
+        # Build search queries
+        search_queries = [query.format(state=state) for query in config.SEARCH_QUERIES]
         
         if case_type_filter != "All":
             search_queries = [q + f' "{case_type_filter}"' for q in search_queries]
@@ -51,7 +46,7 @@ class DatabaseBuilder:
                 break
                 
             # Get multiple pages of results
-            for page in range(3):  # Get 3 pages per query
+            for page in range(config.PAGES_PER_QUERY):
                 if cases_found >= num_cases:
                     break
                     
@@ -107,8 +102,8 @@ class DatabaseBuilder:
             "engine": "google_scholar",
             "q": query,
             "api_key": self.api_key,
-            "num": "20",
-            "start": str(page * 20)
+            "num": str(config.RESULTS_PER_PAGE),
+            "start": str(page * config.RESULTS_PER_PAGE)
         }
         
         try:
