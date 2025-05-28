@@ -20,7 +20,7 @@ class DatabaseBuilder:
     
     def search_judges_in_state(self, state):
         """
-        Search for judges in a specific state
+        Search for judges in a specific state using web search
         
         Args:
             state: State to search in
@@ -30,20 +30,52 @@ class DatabaseBuilder:
         """
         judges = set()
         
-        # More general search queries to find judges
-        search_queries = [
+        # Search for list of judges
+        search_query = f"list of {state} judges criminal court"
+        
+        url = "https://serpapi.com/search"
+        params = {
+            "engine": "google",  # Use regular Google search for lists
+            "q": search_query,
+            "api_key": self.api_key,
+            "num": "10"
+        }
+        
+        try:
+            response = requests.get(url, params=params, timeout=30)
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Extract from organic results
+                for result in data.get("organic_results", []):
+                    snippet = result.get("snippet", "")
+                    # Extract judge names from snippets
+                    judge_patterns = [
+                        r'Judge\s+([A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+)',
+                        r'Hon\.\s+([A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+)',
+                    ]
+                    
+                    for pattern in judge_patterns:
+                        matches = re.findall(pattern, snippet)
+                        for match in matches:
+                            if match and len(match.split()) >= 2:
+                                judges.add(f"Judge {match}")
+        except:
+            pass
+        
+        # Also search Google Scholar for criminal cases
+        scholar_queries = [
             f'{state} criminal case judge verdict',
-            f'{state} court judge sentence criminal',
-            f'{state} judge ruling criminal defendant'
+            f'{state} superior court judge criminal'
         ]
         
-        for query in search_queries:
+        for query in scholar_queries:
             results = self._search_google_scholar(query, 0)
             
             if not results:
                 continue
             
-            for result in results:
+            for result in results[:10]:  # Limit to first 10 results
                 title = result.get("title", "")
                 snippet = result.get("snippet", "")
                 text = title + " " + snippet
@@ -51,22 +83,23 @@ class DatabaseBuilder:
                 # Extract judge names
                 judge_patterns = [
                     r'Judge\s+([A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+)',
-                    r'Justice\s+([A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+)',
-                    r'Hon\.\s+([A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+)',
-                    r'Honorable\s+([A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+)'
+                    r'before\s+(?:Judge\s+)?([A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+),?\s+J\.',
                 ]
                 
                 for pattern in judge_patterns:
                     matches = re.findall(pattern, text)
                     for match in matches:
-                        if match and len(match.split()) >= 2:  # Valid name
+                        if match and len(match.split()) >= 2:
                             judges.add(f"Judge {match}")
         
-        # If no judges found, add some common/example judges
-        if not judges:
-            judges.add("All Criminal Cases")  # Option to search all cases
+        # Always add the option to search all cases
+        judges_list = sorted(list(judges))
+        if not judges_list:
+            judges_list = ["Search All Criminal Cases"]
+        else:
+            judges_list.append("Search All Criminal Cases")
         
-        return sorted(list(judges))
+        return judges_list
     
     def build_judge_database(self, state, judge_name, num_cases, progress_callback=None):
         """
@@ -250,8 +283,9 @@ class DatabaseBuilder:
             return None
         except Exception as e:
             print(f"Unexpected error: {e}")
-            return None
-            
+            return None"""
+Database builder for fetching and storing criminal case data from Google Scholar
+"""
 import requests
 import os
 from dotenv import load_dotenv
