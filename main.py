@@ -40,7 +40,6 @@ class JudicialAnalyzer:
         
         # Search section
         self.search_frame = SearchFrame(main_frame)
-        self.search_frame.search_judges_button.configure(command=self.search_for_judges)
         self.search_frame.build_button.configure(command=self.build_case_database)
         self.search_frame.state_dropdown.bind('<<ComboboxSelected>>', self.on_state_selected)
         
@@ -68,10 +67,17 @@ class JudicialAnalyzer:
         main_frame.rowconfigure(3, weight=1)
     
     def on_state_selected(self, event):
-        """Clear judge dropdown when state changes"""
-        self.search_frame.judge_dropdown.set("Select a judge...")
-        self.search_frame.judge_dropdown['values'] = []
-        self.available_judges = []
+        """When state is selected, automatically search for judges"""
+        state = self.search_frame.state_var.get()
+        if state:
+            # Clear current selection
+            self.search_frame.judge_dropdown.set("Loading judges...")
+            self.search_frame.judge_dropdown['values'] = []
+            
+            # Search for judges in background
+            thread = threading.Thread(target=self._search_judges_thread, args=(state,))
+            thread.daemon = True
+            thread.start()
         
     def search_for_judges(self):
         """Search for judges in the selected state"""
@@ -233,10 +239,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
-
-
-
+    main()"""
+Criminal Case Outcome Predictor - Main Application
+"""
 import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
