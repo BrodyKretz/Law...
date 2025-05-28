@@ -66,7 +66,7 @@ def generate_single_judge_stats(self, judge_name, cases):
         return stats
     
     def generate_single_judge_stats(self, judge_name, cases):
-        """Generate statistics for a single judge"""
+        
         if not cases:
             return f"No cases found for {judge_name}\n"
         
