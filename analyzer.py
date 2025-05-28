@@ -64,9 +64,75 @@ def generate_single_judge_stats(self, judge_name, cases):
         stats += f"Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
         
         return stats
-
-
-
+    
+    def generate_single_judge_stats(self, judge_name, cases):
+        """Generate statistics for a single judge"""
+        if not cases:
+            return f"No cases found for {judge_name}\n"
+        
+        stats = f"JUDGE STATISTICS: {judge_name}\n"
+        stats += f"{'='*60}\n\n"
+        
+        total = len(cases)
+        guilty = sum(1 for case in cases if case['verdict'] == 'Guilty')
+        not_guilty = sum(1 for case in cases if case['verdict'] == 'Not Guilty')
+        plea_deals = sum(1 for case in cases if case['verdict'] == 'Plea Deal')
+        
+        guilty_rate = (guilty / total * 100) if total > 0 else 0
+        
+        stats += f"Total Cases Analyzed: {total}\n"
+        stats += f"Conviction Rate: {guilty_rate:.1f}%\n\n"
+        
+        stats += f"Verdict Breakdown:\n"
+        stats += f"- Guilty: {guilty} ({guilty/total*100:.1f}%)\n"
+        stats += f"- Not Guilty: {not_guilty} ({not_guilty/total*100:.1f}%)\n"
+        stats += f"- Plea Deals: {plea_deals} ({plea_deals/total*100:.1f}%)\n\n"
+        
+        # Analyze sentences
+        sentences = []
+        probation_count = 0
+        prison_count = 0
+        
+        for case in cases:
+            if case['verdict'] == 'Guilty' and case['sentence'] != 'Not specified':
+                # Check for prison time
+                years_match = re.search(r'(\d+)\s*year', case['sentence'], re.IGNORECASE)
+                if years_match:
+                    sentences.append(int(years_match.group(1)))
+                    prison_count += 1
+                elif 'probation' in case['sentence'].lower():
+                    probation_count += 1
+        
+        if sentences:
+            avg_sentence = sum(sentences) / len(sentences)
+            stats += f"Sentencing Patterns (for guilty verdicts):\n"
+            stats += f"- Average Prison Sentence: {avg_sentence:.1f} years\n"
+            stats += f"- Minimum Sentence: {min(sentences)} years\n"
+            stats += f"- Maximum Sentence: {max(sentences)} years\n"
+            stats += f"- Prison Sentences: {prison_count}\n"
+            stats += f"- Probation Only: {probation_count}\n\n"
+        
+        # Analyze case types
+        case_types = {}
+        for case in cases:
+            case_type = case['charge']
+            if case_type not in case_types:
+                case_types[case_type] = {'total': 0, 'guilty': 0}
+            case_types[case_type]['total'] += 1
+            if case['verdict'] == 'Guilty':
+                case_types[case_type]['guilty'] += 1
+        
+        stats += f"Case Types Handled:\n"
+        for case_type, data in sorted(case_types.items(), key=lambda x: x[1]['total'], reverse=True)[:10]:
+            conviction_rate = (data['guilty'] / data['total'] * 100) if data['total'] > 0 else 0
+            stats += f"- {case_type}: {data['total']} cases ({conviction_rate:.1f}% conviction rate)\n"
+        
+        stats += f"\n{'='*60}\n"
+        stats += f"Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+        
+        return stats"""
+Case analysis and prediction engine for criminal cases
+"""
 import re
 import config
 from datetime import datetime
