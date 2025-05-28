@@ -2,94 +2,129 @@
 
 ## Common Issues and Solutions
 
-### API Not Working / Still Showing Sample Data
+### No Cases Found / Empty Database
 
-1. **Check API Key is Loaded**
-   - Look at the status bar at the bottom of the app
-   - Should show "API Key: Loaded ✓"
-   - If it shows "API Key: Not Found ✗", check your `.env` file
+1. **Try Different Search Parameters**
+   - Use "All" for case type instead of specific crimes
+   - Increase the number of cases to search (try 100-200)
+   - Some case types may have limited data in Google Scholar
 
-2. **Verify .env File**
-   ```bash
-   cat .env
-   ```
-   Should show:
-   ```
-   SERPAPI_KEY=your_actual_api_key_here
-   ```
+2. **Google Scholar Limitations**
+   - Academic database - not all criminal cases are indexed
+   - Better coverage for appellate/significant cases
+   - Local/minor cases may not appear
 
-3. **Check Data Source Selection**
-   - Make sure "Use Real API Data" is selected (not "Use Sample Data")
+3. **Search Tips**
+   - Start broad, then narrow down
+   - Try major cities/counties in your state
+   - Federal cases often have better coverage
 
-4. **API Key Issues**
-   - Verify your API key is valid at https://serpapi.com/manage-api-key
-   - Check you have remaining credits
-   - Try the API key in their playground first
+### API Issues
+
+**"Invalid API key"**
+- Verify key at https://serpapi.com/manage-api-key
+- Check for extra spaces in .env file
+- Ensure no quotes around the key
+
+**"Rate limit exceeded"**
+- Free tier has limits - wait a few minutes
+- Reduce "Cases to Analyze" number
+- Consider upgrading API plan
+
+**"No results returned"**
+- Google Scholar may not have data for that query
+- Try different state or case type
+- Check your internet connection
+
+### Application Crashes
+
+**During Database Building:**
+- Reduce number of cases to fetch
+- Check Terminal for specific error messages
+- May be network timeout - try again
+
+**Memory Issues:**
+- Close other applications
+- Restart the app
+- Reduce cases to under 100
+
+### Poor Predictions
+
+**"No similar cases found"**
+- Your case combination may be unique
+- Try broader case type categories
+- Remove judge filter to get more matches
+
+**Unrealistic Results:**
+- Database may be too small - build larger dataset
+- Check if similar cases actually match your client
+- Remember: predictions based on available data only
 
 ### Debug Mode
 
-To see what's happening, run the app and check the Terminal output:
-- API request details will be printed
-- Response status codes will be shown
-- Error messages will be more detailed
+Run with debug output:
+```python
+# Add to top of main.py after imports:
+import logging
+logging.basicConfig(level=logging.DEBUG)
+```
 
-### Common Error Messages
+This will show:
+- API calls being made
+- Data being extracted
+- Matching logic
 
-**"No cases found for Judge X in Google Scholar"**
-- Try a different judge name
-- Google Scholar may not have indexed cases for that specific judge
-- Try searching for more common judges or well-known cases
+### Testing Your Setup
 
-**"SerpAPI Error: Invalid API key"**
-- Your API key is incorrect
-- Double-check the key in your `.env` file
-- Make sure there are no extra spaces or quotes
-
-**"HTTP Error: 429"**
-- Rate limit exceeded
-- Wait a few minutes and try again
-- Reduce the "Max Results" number
-
-### Testing the API
-
-Test your API key directly:
+1. **Test API Connection:**
 ```python
 import requests
 
-api_key = "your_api_key_here"
-url = "https://serpapi.com/search"
-params = {
-    "engine": "google_scholar",
-    "q": "Judge California court",
-    "api_key": api_key,
-    "num": "5"
-}
-
-response = requests.get(url, params=params)
+api_key = "your_key_here"
+response = requests.get(
+    "https://serpapi.com/search",
+    params={
+        "engine": "google_scholar",
+        "q": "criminal case California",
+        "api_key": api_key
+    }
+)
 print(response.json())
 ```
 
-### Still Not Working?
+2. **Test with Known Cases:**
+- Search for "California" + "All" case types
+- Should find various criminal cases
+- If nothing found, API or network issue
 
-1. **Use Sample Data Mode**
-   - Select "Use Sample Data" to test the app functionality
-   - This proves the app itself is working
+### Performance Tips
 
-2. **Check Terminal for Errors**
-   - Run the app from Terminal
-   - Look for any Python errors or stack traces
+1. **Faster Searches:**
+   - Start with 20-50 cases for testing
+   - Use specific case types when possible
+   - Build database once, analyze multiple times
 
-3. **Verify Installation**
-   ```bash
-   pip list | grep google-search-results
-   ```
-   Should show: `google-search-results    2.4.2`
+2. **Better Matches:**
+   - Be accurate with criminal history
+   - Use exact charge names from dropdown
+   - Include judge if known
 
-### Contact Support
+### When to Contact Support
 
-If you're still having issues:
-- Check SerpAPI documentation: https://serpapi.com/google-scholar-api
-- Open an issue on GitHub with:
-  - The error message
-  - Terminal output
-  - Your Python version (`python --version`)
+If you've tried the above and still have issues:
+1. Check SerpAPI status page
+2. Review Google Scholar's coverage
+3. Open GitHub issue with:
+   - Error messages
+   - Steps to reproduce
+   - Your Python version
+   - Operating system
+
+### Alternative Data Sources
+
+If Google Scholar isn't sufficient:
+- Consider adding other legal databases
+- Check if your jurisdiction publishes case data
+- Look into commercial legal research APIs
+
+Remember: This tool analyzes publicly available data. Coverage and accuracy depend on what's indexed in Google Scholar.
