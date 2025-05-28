@@ -18,15 +18,19 @@ class SearchFrame:
         self.state_dropdown['values'] = config.STATES
         self.state_dropdown.grid(row=0, column=1, sticky=tk.W, pady=5, padx=5)
         
-        # Case type filter
-        ttk.Label(self.frame, text="Case Type:").grid(row=0, column=2, sticky=tk.W, pady=5, padx=(20,0))
-        self.case_type_var = tk.StringVar(value="All")
-        self.case_type_dropdown = ttk.Combobox(self.frame, textvariable=self.case_type_var, width=20)
-        self.case_type_dropdown['values'] = config.CASE_TYPES
-        self.case_type_dropdown.grid(row=0, column=3, sticky=tk.W, pady=5, padx=5)
+        # Search judges button
+        self.search_judges_button = ttk.Button(self.frame, text="Search for Judges")
+        self.search_judges_button.grid(row=0, column=2, padx=10)
+        
+        # Judge selection
+        ttk.Label(self.frame, text="Judge:").grid(row=0, column=3, sticky=tk.W, pady=5, padx=(20,0))
+        self.judge_var = tk.StringVar()
+        self.judge_dropdown = ttk.Combobox(self.frame, textvariable=self.judge_var, width=30, state="readonly")
+        self.judge_dropdown.grid(row=0, column=4, sticky=tk.W, pady=5, padx=5)
+        self.judge_dropdown.set("Select a judge...")
         
         # Number of cases to fetch
-        ttk.Label(self.frame, text="Cases to Analyze:").grid(row=0, column=4, sticky=tk.W, pady=5, padx=(20,0))
+        ttk.Label(self.frame, text="Cases to Analyze:").grid(row=0, column=5, sticky=tk.W, pady=5, padx=(20,0))
         self.num_cases_var = tk.StringVar(value=str(config.DEFAULT_NUM_CASES))
         self.num_cases_spinbox = ttk.Spinbox(
             self.frame, 
@@ -35,22 +39,27 @@ class SearchFrame:
             textvariable=self.num_cases_var, 
             width=10
         )
-        self.num_cases_spinbox.grid(row=0, column=5, sticky=tk.W, pady=5, padx=5)
+        self.num_cases_spinbox.grid(row=0, column=6, sticky=tk.W, pady=5, padx=5)
         
-        # Search button
-        self.search_button = ttk.Button(self.frame, text="Build Case Database")
-        self.search_button.grid(row=0, column=6, padx=20)
+        # Build database button
+        self.build_button = ttk.Button(self.frame, text="Build Case Database")
+        self.build_button.grid(row=0, column=7, padx=20)
 
 
 class ClientFrame:
-    """Client information input controls"""
+    """Client information input controls (optional)"""
     def __init__(self, parent):
-        self.frame = ttk.LabelFrame(parent, text="Your Client's Information", padding="10")
+        self.frame = ttk.LabelFrame(parent, text="Client Analysis (Optional)", padding="10")
         self.frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
+        
+        # Add note about optional nature
+        note_label = ttk.Label(self.frame, text="Enter client information to see how they might fare before this judge:", 
+                              font=('Arial', 10, 'italic'))
+        note_label.grid(row=0, column=0, columnspan=4, sticky=tk.W, pady=(0, 10))
         
         # Client criminal history
         history_frame = ttk.Frame(self.frame)
-        history_frame.grid(row=0, column=0, columnspan=4, sticky=tk.W, pady=5)
+        history_frame.grid(row=1, column=0, columnspan=4, sticky=tk.W, pady=5)
         
         ttk.Label(history_frame, text="Prior Felonies:").pack(side=tk.LEFT)
         self.felonies_var = tk.StringVar(value="0")
@@ -68,21 +77,15 @@ class ClientFrame:
         self.convictions_spinbox.pack(side=tk.LEFT, padx=5)
         
         # Current charge
-        ttk.Label(self.frame, text="Current Charge:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        ttk.Label(self.frame, text="Current Charge:").grid(row=2, column=0, sticky=tk.W, pady=5)
         self.case_type_var = tk.StringVar()
         self.case_type_dropdown = ttk.Combobox(self.frame, textvariable=self.case_type_var, width=25)
         self.case_type_dropdown['values'] = config.CHARGE_TYPES
-        self.case_type_dropdown.grid(row=1, column=1, sticky=tk.W, pady=5)
-        
-        # Judge selection (optional)
-        ttk.Label(self.frame, text="Judge (if known):").grid(row=1, column=2, sticky=tk.W, pady=5, padx=(20,0))
-        self.judge_var = tk.StringVar()
-        self.judge_dropdown = ttk.Combobox(self.frame, textvariable=self.judge_var, width=25)
-        self.judge_dropdown.grid(row=1, column=3, sticky=tk.W, pady=5)
+        self.case_type_dropdown.grid(row=2, column=1, sticky=tk.W, pady=5)
         
         # Analyze button
-        self.analyze_button = ttk.Button(self.frame, text="Analyze Case Outcome")
-        self.analyze_button.grid(row=2, column=0, columnspan=4, pady=10)
+        self.analyze_button = ttk.Button(self.frame, text="Analyze Client Outcome")
+        self.analyze_button.grid(row=3, column=0, columnspan=2, pady=10)
 
 
 class ResultsNotebook:
