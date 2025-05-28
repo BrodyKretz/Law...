@@ -1,4 +1,3 @@
-
 """
 Database builder for fetching and storing criminal case data from Google Scholar
 """
@@ -31,12 +30,11 @@ class DatabaseBuilder:
         """
         judges = set()
         
-        # Search queries to find judges
+        # More general search queries to find judges
         search_queries = [
-            f'"{state}" "Judge" criminal court verdict sentence',
-            f'"{state} Superior Court" "Judge" criminal case',
-            f'"{state} District Court" "Judge" criminal defendant',
-            f'"{state}" "Honorable Judge" criminal sentencing'
+            f'{state} criminal case judge verdict',
+            f'{state} court judge sentence criminal',
+            f'{state} judge ruling criminal defendant'
         ]
         
         for query in search_queries:
@@ -64,6 +62,10 @@ class DatabaseBuilder:
                         if match and len(match.split()) >= 2:  # Valid name
                             judges.add(f"Judge {match}")
         
+        # If no judges found, add some common/example judges
+        if not judges:
+            judges.add("All Criminal Cases")  # Option to search all cases
+        
         return sorted(list(judges))
     
     def build_judge_database(self, state, judge_name, num_cases, progress_callback=None):
@@ -81,14 +83,21 @@ class DatabaseBuilder:
         """
         case_database = []
         
-        # Build search queries specific to this judge
-        search_queries = [
-            f'"{judge_name}" "{state}" criminal verdict sentence',
-            f'"{judge_name}" criminal defendant "prior convictions"',
-            f'"{judge_name}" sentencing "criminal history"',
-            f'"{judge_name}" "found guilty" prison term',
-            f'"{judge_name}" plea deal criminal case'
-        ]
+        # If "All Criminal Cases" is selected, search broadly
+        if judge_name == "All Criminal Cases":
+            search_queries = [
+                f'{state} criminal verdict sentence defendant',
+                f'{state} criminal case guilty prison term',
+                f'{state} criminal defendant prior convictions'
+            ]
+        else:
+            # Build search queries specific to this judge
+            judge_simple = judge_name.replace("Judge ", "")
+            search_queries = [
+                f'{judge_simple} {state} criminal verdict',
+                f'{judge_simple} criminal defendant sentence',
+                f'{judge_simple} criminal case ruling'
+            ]
         
         cases_found = 0
         
@@ -111,15 +120,12 @@ class DatabaseBuilder:
                     snippet = result.get("snippet", "")
                     text = title + " " + snippet
                     
-                    # Only process if this judge is mentioned
-                    if judge_name.replace("Judge ", "") not in text:
-                        continue
-                    
                     # Extract case information
                     case_info = self.extractor.extract_case_details(text)
                     
-                    # Set the judge name
-                    case_info['judge'] = judge_name
+                    # Set the judge name if not "All Criminal Cases"
+                    if judge_name != "All Criminal Cases":
+                        case_info['judge'] = judge_name
                     
                     if case_info and case_info['verdict'] != 'Unknown':
                         case_database.append(case_info)
@@ -132,6 +138,136 @@ class DatabaseBuilder:
                             break
         
         return case_database
+        
+    def build_database(self, state, case_type_filter, num_cases, progress_callback=None):
+        """
+        Build database of criminal cases with defendant histories
+        
+        Args:
+            state: State to search in
+            case_type_filter: Type of cases to filter (or "All")
+            num_cases: Number of cases to fetch
+            progress_callback: Function to call with progress updates
+            
+        Returns:
+            tuple: (case_database, judges_data)
+        """
+        case_database = []
+        judges_data = {}
+        
+        # Build search queries
+        search_queries = [query.format(state=state) for query in config.SEARCH_QUERIES]
+        
+        if case_type_filter != "All":
+            search_queries = [q + f' "{case_type_filter}"' for q in search_queries]
+        
+        cases_found = 0
+        
+        for query_idx, query in enumerate(search_queries):
+            if cases_found >= num_cases:
+                break
+                
+            # Get multiple pages of results
+            for page in range(config.PAGES_PER_QUERY):
+                if cases_found >= num_cases:
+                    break
+                    
+                results = self._search_google_scholar(query, page)
+                
+                if not results:
+                    continue
+                
+                for result in results:
+                    title = result.get("title", "")
+                    snippet = result.get("snippet", "")
+                    text = title + " " + snippet
+                    
+                    # Extract case information
+                    case_info = self.extractor.extract_case_details(text)
+                    
+                    if case_info and case_info['verdict'] != 'Unknown':
+                        case_database.append(case_info)
+                        
+                        # Track judge statistics
+                        if case_info['judge'] != "Unknown":
+                            if case_info['judge'] not in judges_data:
+                                judges_data[case_info['judge']] = []
+                            judges_data[case_info['judge']].append(case_info)
+                        
+                        cases_found += 1
+                        
+                        if progress_callback:
+                            progress_callback(cases_found)
+                        
+                        if cases_found >= num_cases:
+                            break
+        
+        return case_database, judges_data
+    
+    def _search_google_scholar(self, query, page=0):
+        """
+        Search Google Scholar using SerpAPI
+        
+        Args:
+            query: Search query
+            page: Page number (0-based)
+            
+        Returns:
+            list: Organic results or None if error
+        """
+        if not self.api_key:
+            print("No API key found!")
+            return None
+            
+        url = "https://serpapi.com/search"
+        params = {
+            "engine": "google_scholar",
+            "q": query,
+            "api_key": self.api_key,
+            "num": str(config.RESULTS_PER_PAGE),
+            "start": str(page * config.RESULTS_PER_PAGE)
+        }
+        
+        try:
+            response = requests.get(url, params=params, timeout=30)
+            if response.status_code != 200:
+                print(f"HTTP Error: {response.status_code}")
+                return None
+                
+            data = response.json()
+            
+            if "error" in data:
+                print(f"API Error: {data['error']}")
+                return None
+                
+            return data.get("organic_results", [])
+            
+        except requests.exceptions.Timeout:
+            print("Request timed out")
+            return None
+        except requests.exceptions.RequestException as e:
+            print(f"Request error: {e}")
+            return None
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            return None"""
+Database builder for fetching and storing criminal case data from Google Scholar
+"""
+import requests
+import os
+from dotenv import load_dotenv
+from extractors import CaseExtractor
+import config
+
+# Load environment variables
+load_dotenv()
+
+class DatabaseBuilder:
+    """Handles building the case database from Google Scholar"""
+    
+    def __init__(self):
+        self.api_key = os.getenv('SERPAPI_KEY', '')
+        self.extractor = CaseExtractor()
         
     def build_database(self, state, case_type_filter, num_cases, progress_callback=None):
         """
