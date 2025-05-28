@@ -233,9 +233,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()"""
-Criminal Case Outcome Predictor - Main Application
-"""
+    main()
+
+
+
 import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
