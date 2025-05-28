@@ -3,6 +3,7 @@ GUI components for the Criminal Case Outcome Predictor
 """
 import tkinter as tk
 from tkinter import ttk
+import config
 
 class SearchFrame:
     """Database search controls"""
@@ -14,20 +15,26 @@ class SearchFrame:
         ttk.Label(self.frame, text="State:").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.state_var = tk.StringVar(value="California")
         self.state_dropdown = ttk.Combobox(self.frame, textvariable=self.state_var, width=20)
-        self.state_dropdown['values'] = ['California', 'New York', 'Texas', 'Florida', 'Illinois']
+        self.state_dropdown['values'] = config.STATES
         self.state_dropdown.grid(row=0, column=1, sticky=tk.W, pady=5, padx=5)
         
         # Case type filter
         ttk.Label(self.frame, text="Case Type:").grid(row=0, column=2, sticky=tk.W, pady=5, padx=(20,0))
         self.case_type_var = tk.StringVar(value="All")
         self.case_type_dropdown = ttk.Combobox(self.frame, textvariable=self.case_type_var, width=20)
-        self.case_type_dropdown['values'] = ['All', 'Theft', 'Drug Offense', 'Assault', 'DUI', 'Fraud', 'Burglary', 'Robbery', 'Murder']
+        self.case_type_dropdown['values'] = config.CASE_TYPES
         self.case_type_dropdown.grid(row=0, column=3, sticky=tk.W, pady=5, padx=5)
         
         # Number of cases to fetch
         ttk.Label(self.frame, text="Cases to Analyze:").grid(row=0, column=4, sticky=tk.W, pady=5, padx=(20,0))
-        self.num_cases_var = tk.StringVar(value="50")
-        self.num_cases_spinbox = ttk.Spinbox(self.frame, from_=10, to=200, textvariable=self.num_cases_var, width=10)
+        self.num_cases_var = tk.StringVar(value=str(config.DEFAULT_NUM_CASES))
+        self.num_cases_spinbox = ttk.Spinbox(
+            self.frame, 
+            from_=config.MIN_CASES, 
+            to=config.MAX_CASES, 
+            textvariable=self.num_cases_var, 
+            width=10
+        )
         self.num_cases_spinbox.grid(row=0, column=5, sticky=tk.W, pady=5, padx=5)
         
         # Search button
@@ -44,6 +51,38 @@ class ClientFrame:
         # Client criminal history
         history_frame = ttk.Frame(self.frame)
         history_frame.grid(row=0, column=0, columnspan=4, sticky=tk.W, pady=5)
+        
+        ttk.Label(history_frame, text="Prior Felonies:").pack(side=tk.LEFT)
+        self.felonies_var = tk.StringVar(value="0")
+        self.felonies_spinbox = ttk.Spinbox(history_frame, from_=0, to=20, textvariable=self.felonies_var, width=5)
+        self.felonies_spinbox.pack(side=tk.LEFT, padx=5)
+        
+        ttk.Label(history_frame, text="Prior Misdemeanors:").pack(side=tk.LEFT, padx=(20, 0))
+        self.misdemeanors_var = tk.StringVar(value="0")
+        self.misdemeanors_spinbox = ttk.Spinbox(history_frame, from_=0, to=50, textvariable=self.misdemeanors_var, width=5)
+        self.misdemeanors_spinbox.pack(side=tk.LEFT, padx=5)
+        
+        ttk.Label(history_frame, text="Prior Convictions:").pack(side=tk.LEFT, padx=(20, 0))
+        self.convictions_var = tk.StringVar(value="0")
+        self.convictions_spinbox = ttk.Spinbox(history_frame, from_=0, to=20, textvariable=self.convictions_var, width=5)
+        self.convictions_spinbox.pack(side=tk.LEFT, padx=5)
+        
+        # Current charge
+        ttk.Label(self.frame, text="Current Charge:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        self.case_type_var = tk.StringVar()
+        self.case_type_dropdown = ttk.Combobox(self.frame, textvariable=self.case_type_var, width=25)
+        self.case_type_dropdown['values'] = config.CHARGE_TYPES
+        self.case_type_dropdown.grid(row=1, column=1, sticky=tk.W, pady=5)
+        
+        # Judge selection (optional)
+        ttk.Label(self.frame, text="Judge (if known):").grid(row=1, column=2, sticky=tk.W, pady=5, padx=(20,0))
+        self.judge_var = tk.StringVar()
+        self.judge_dropdown = ttk.Combobox(self.frame, textvariable=self.judge_var, width=25)
+        self.judge_dropdown.grid(row=1, column=3, sticky=tk.W, pady=5)
+        
+        # Analyze button
+        self.analyze_button = ttk.Button(self.frame, text="Analyze Case Outcome")
+        self.analyze_button.grid(row=2, column=0, columnspan=4, pady=10)=4, sticky=tk.W, pady=5)
         
         ttk.Label(history_frame, text="Prior Felonies:").pack(side=tk.LEFT)
         self.felonies_var = tk.StringVar(value="0")
