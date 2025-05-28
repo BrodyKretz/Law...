@@ -63,9 +63,10 @@ def generate_single_judge_stats(self, judge_name, cases):
         stats += f"\n{'='*60}\n"
         stats += f"Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
         
-        return stats"""
-Case analysis and prediction engine for criminal cases
-"""
+        return stats
+
+
+
 import re
 import config
 from datetime import datetime
