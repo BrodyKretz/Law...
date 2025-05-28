@@ -18,19 +18,15 @@ class SearchFrame:
         self.state_dropdown['values'] = config.STATES
         self.state_dropdown.grid(row=0, column=1, sticky=tk.W, pady=5, padx=5)
         
-        # Search judges button
-        self.search_judges_button = ttk.Button(self.frame, text="Search for Judges")
-        self.search_judges_button.grid(row=0, column=2, padx=10)
-        
         # Judge selection
-        ttk.Label(self.frame, text="Judge:").grid(row=0, column=3, sticky=tk.W, pady=5, padx=(20,0))
+        ttk.Label(self.frame, text="Judge:").grid(row=0, column=2, sticky=tk.W, pady=5, padx=(20,0))
         self.judge_var = tk.StringVar()
         self.judge_dropdown = ttk.Combobox(self.frame, textvariable=self.judge_var, width=30, state="readonly")
-        self.judge_dropdown.grid(row=0, column=4, sticky=tk.W, pady=5, padx=5)
-        self.judge_dropdown.set("Select a judge...")
+        self.judge_dropdown.grid(row=0, column=3, sticky=tk.W, pady=5, padx=5)
+        self.judge_dropdown.set("Select state first...")
         
         # Number of cases to fetch
-        ttk.Label(self.frame, text="Cases to Analyze:").grid(row=0, column=5, sticky=tk.W, pady=5, padx=(20,0))
+        ttk.Label(self.frame, text="Cases to Analyze:").grid(row=0, column=4, sticky=tk.W, pady=5, padx=(20,0))
         self.num_cases_var = tk.StringVar(value=str(config.DEFAULT_NUM_CASES))
         self.num_cases_spinbox = ttk.Spinbox(
             self.frame, 
@@ -39,11 +35,11 @@ class SearchFrame:
             textvariable=self.num_cases_var, 
             width=10
         )
-        self.num_cases_spinbox.grid(row=0, column=6, sticky=tk.W, pady=5, padx=5)
+        self.num_cases_spinbox.grid(row=0, column=5, sticky=tk.W, pady=5, padx=5)
         
         # Build database button
         self.build_button = ttk.Button(self.frame, text="Build Case Database")
-        self.build_button.grid(row=0, column=7, padx=20)
+        self.build_button.grid(row=0, column=6, padx=20)
 
 
 class ClientFrame:
